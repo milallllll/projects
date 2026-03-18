@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CrackIt — 压力面试模拟器</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+:root {
+  --bg: #06060a;
+  --s1: #0e0e16;
+  --s2: #16161f;
+  --s3: #1e1e2a;
+  --border: #252535;
+  --border2: #32324a;
+  --acc: #c8ff47;
+  --acc2: #ff6640;
+  --acc3: #4dacff;
+  --text: #efefef;
+  --sub: #9090b0;
+  --muted: #55556a;
+  --r: 12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-weight: 400;
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* scanline texture */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,.08) 2px, rgba(0,0,0,.08) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* grid bg */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(rgba(200,255,71,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(200,255,71,.025) 1px, transparent 1px);
+  background-size: 48px 48px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* ─── TOPBAR ─── */
+.topbar {
+  position: sticky; top: 0;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 32px;
+  background: rgba(6,6,10,.88);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  z-index: 200;
+}
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -.03em;
+  color: var(--text);
+}
+.logo b { color: var(--acc); font-weight: 800; }
+.topbar-right { display: flex; align-items: center; gap: 10px; }
+.pill {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+  color: var(--sub);
+}
+.pill.demo { border-color: rgba(255,102,64,.4); color: var(--acc2); background: rgba(255,102,64,.08); }
+.pill.live { border-color: rgba(200,255,71,.4); color: var(--acc); background: rgba(200,255,71,.06); }
+
+/* ─── PAGE SYSTEM ─── */
+.page { display: none; }
+.page.active { display: block; animation: fadeUp .35s ease both; }
+@keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+
+/* ─── SETUP PAGE ─── */
+.setup-wrap {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 60px 24px 80px;
+}
+.setup-hero {
+  text-align: center;
+  margin-bottom: 52px;
+}
+.setup-hero .eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--acc);
+  margin-bottom: 16px;
+}
+.setup-hero h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(2.2rem, 6vw, 3.8rem);
+  font-weight: 800;
+  line-height: 1.06;
+  letter-spacing: -.04em;
+}
+.setup-hero h1 em { font-style: normal; color: var(--acc); }
+.setup-hero p { margin-top: 14px; color: var(--sub); font-size: .95rem; line-height: 1.75; }
+
+.field { margin-bottom: 28px; }
+.field-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: .7rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--acc);
+  margin-bottom: 10px;
+}
+
+/* company chips */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  border: 1.5px solid var(--border2);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: .85rem;
+  cursor: pointer;
+  background: var(--s1);
+  transition: all .18s;
+  user-select: none;
+}
+.chip:hover { border-color: var(--sub); background: var(--s2); }
+.chip.sel { border-color: var(--acc); background: rgba(200,255,71,.08); color: var(--acc); }
+
+/* role combo */
+.role-combo { display: flex; gap: 10px; align-items: stretch; }
+.role-select-wrap { flex: 1; position: relative; }
+.role-select-wrap select {
+  width: 100%;
+  appearance: none;
+  background: var(--s1);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: .9rem;
+  padding: 13px 40px 13px 16px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color .18s;
+}
+.role-select-wrap select:focus { border-color: var(--acc); }
+.role-select-wrap::after {
+  content: '▾';
+  position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--sub); pointer-events: none; font-size: .8rem;
+}
+.role-divider {
+  display: flex; align-items: center;
+  font-family: 'DM Mono', monospace;
+  font-size: .7rem; color: var(--muted);
+}
+.role-custom-wrap { flex: 1; }
+.role-custom-wrap input {
+  width: 100%;
+  background: var(--s1);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: .9rem;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color .18s;
+}
+.role-custom-wrap input::placeholder { color: var(--muted); }
+.role-custom-wrap input:focus { border-color: var(--acc); }
+
+/* textarea */
+textarea {
+  width: 100%;
+  background: var(--s1);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: .88rem;
+  line-height: 1.75;
+  padding: 14px 16px;
+  resize: vertical;
+  outline: none;
+  transition: border-color .18s;
+}
+textarea:focus { border-color: var(--acc); }
+textarea::placeholder { color: var(--muted); }
+
+/* api key row */
+.api-row { display: flex; gap: 10px; }
+.api-row input {
+  flex: 1;
+  background: var(--s1);
+  border: 1.5px solid var(--border2);
+  border-radius: var(--r);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  font-size: .82rem;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color .18s;
+}
+.api-row input::placeholder { color: var(--muted); }
+.api-row input:focus { border-color: var(--acc3); }
+
+.api-note {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.api-note a { color: var(--acc3); text-decoration: none; }
+
+/* mode toggle */
+.mode-toggle {
+  display: flex;
+  border: 1.5px solid var(--border2);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 28px;
+}
+.mode-btn {
+  flex: 1;
+  padding: 12px;
+  text-align: center;
+  cursor: pointer;
+  font-size: .85rem;
+  transition: all .18s;
+  border: none;
+  background: transparent;
+  color: var(--sub);
+}
+.mode-btn.active { background: var(--s2); color: var(--text); }
+.mode-btn span { font-size: .72rem; display: block; margin-top: 2px; }
+.mode-btn.demo-active { color: var(--acc2); background: rgba(255,102,64,.08); }
+.mode-btn.live-active { color: var(--acc); background: rgba(200,255,71,.06); }
+
+/* CTA */
+.cta-row { display: flex; gap: 12px; margin-top: 8px; }
+.btn-primary {
+  flex: 1;
+  background: var(--acc);
+  color: #06060a;
+  border: none;
+  border-radius: var(--r);
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: .95rem;
+  padding: 16px 24px;
+  cursor: pointer;
+  letter-spacing: .01em;
+  transition: opacity .18s, transform .12s;
+}
+.btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.btn-demo {
+  background: transparent;
+  border: 1.5px solid var(--acc2);
+  color: var(--acc2);
+  border-radius: var(--r);
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: .88rem;
+  padding: 16px 22px;
+  cursor: pointer;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.btn-demo:hover { background: rgba(255,102,64,.1); }
+
+/* ─── INTERVIEW PAGE ─── */
+.iv-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: calc(100vh - 56px);
+}
+
+/* sidebar */
+.iv-sidebar {
+  background: var(--s1);
+  border-right: 1px solid var(--border);
+  padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 16px;
+  overflow-y: auto;
+}
+.sb-label {
+  font-family: 'DM Mono', monospace;
+  font-size: .65rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sb-ctx { display: flex; flex-direction: column; gap: 6px; }
+.sb-chip {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: .82rem;
+  display: flex; align-items: center; gap: 7px;
+  color: var(--sub);
+}
+.sb-chip strong { color: var(--text); font-weight: 500; }
+
+.round-box {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: center;
+}
+.round-big {
+  font-family: 'Syne', sans-serif;
+  font-size: 2.8rem;
+  font-weight: 800;
+  color: var(--acc);
+  line-height: 1;
+}
+.round-sub { font-size: .72rem; color: var(--muted); margin-top: 3px; }
+
+.score-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.score-item {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+}
+.score-val { font-family: 'Syne', sans-serif; font-size: 1.4rem; font-weight: 700; }
+.score-lbl { font-size: .68rem; color: var(--muted); margin-top: 2px; }
+.score-logic { color: var(--acc3); }
+.score-expr { color: var(--acc); }
+
+.sb-tip {
+  background: rgba(200,255,71,.04);
+  border: 1px solid rgba(200,255,71,.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: .78rem;
+  color: var(--sub);
+  line-height: 1.6;
+}
+
+.sb-reset {
+  margin-top: auto;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: .78rem;
+  padding: 9px;
+  cursor: pointer;
+  width: 100%;
+  transition: all .18s;
+}
+.sb-reset:hover { border-color: var(--sub); color: var(--sub); }
+
+/* chat */
+.iv-chat { display: flex; flex-direction: column; height: 100%; }
+
+.chat-msgs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 32px;
+  display: flex; flex-direction: column; gap: 16px;
+  scroll-behavior: smooth;
+}
+.chat-msgs::-webkit-scrollbar { width: 3px; }
+.chat-msgs::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.msg { max-width: 78%; animation: msgPop .28s ease both; }
+@keyframes msgPop { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+.msg-ai { align-self: flex-start; }
+.msg-user { align-self: flex-end; }
+
+.msg-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: .65rem;
+  color: var(--muted);
+  margin-bottom: 5px;
+  letter-spacing: .04em;
+}
+.msg-ai .msg-meta { text-align: left; }
+.msg-user .msg-meta { text-align: right; }
+
+.msg-bubble {
+  padding: 14px 18px;
+  border-radius: 14px;
+  font-size: .9rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.msg-ai .msg-bubble {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 3px;
+}
+.msg-user .msg-bubble {
+  background: rgba(200,255,71,.09);
+  border: 1px solid rgba(200,255,71,.22);
+  border-bottom-right-radius: 3px;
+}
+
+/* ─── FEEDBACK CARD ─── */
+.fb-card {
+  align-self: stretch;
+  background: linear-gradient(135deg, rgba(77,172,255,.05), rgba(200,255,71,.04));
+  border: 1px solid rgba(77,172,255,.22);
+  border-radius: 14px;
+  padding: 18px 20px;
+  animation: msgPop .35s ease both;
+}
+.fb-header {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 14px;
+}
+.fb-header h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--acc3);
+}
+.fb-tag {
+  font-family: 'DM Mono', monospace;
+  font-size: .6rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(77,172,255,.3);
+  color: var(--acc3);
+  letter-spacing: .06em;
+}
+
+.fb-row { margin-bottom: 12px; }
+.fb-row-label {
+  font-family: 'DM Mono', monospace;
+  font-size: .68rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--acc2);
+  margin-bottom: 5px;
+  display: flex; align-items: center; gap: 6px;
+}
+.fb-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--acc2); flex-shrink: 0; }
+.fb-dot.g { background: var(--acc); }
+.fb-dot.b { background: var(--acc3); }
+.fb-row p { font-size: .86rem; color: #c8c8d8; line-height: 1.75; }
+.fb-score-row {
+  display: flex; gap: 10px; margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.fb-score {
+  flex: 1;
+  background: var(--s1);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+.fb-score .n { font-family: 'Syne', sans-serif; font-size: 1.3rem; font-weight: 700; }
+.fb-score .l { font-size: .7rem; color: var(--muted); margin-top: 2px; }
+.logic-c { color: var(--acc3); }
+.expr-c { color: var(--acc); }
+.method-c { color: var(--acc2); }
+
+/* typing */
+.typing-wrap { align-self: flex-start; animation: msgPop .28s ease both; }
+.typing-bubble {
+  background: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  border-bottom-left-radius: 3px;
+  padding: 14px 18px;
+  display: flex; gap: 5px; align-items: center;
+}
+.typing-bubble span {
+  width: 6px; height: 6px; background: var(--muted);
+  border-radius: 50%; animation: tdot 1.2s infinite;
+}
+.typing-bubble span:nth-child(2) { animation-delay: .2s; }
+.typing-bubble span:nth-child(3) { animation-delay: .4s; }
+@keyframes tdot { 0%,60%,100%{opacity:.3;transform:none} 30%{opacity:1;transform:translateY(-4px)} }
+
+/* input bar */
+.chat-bar {
+  border-top: 1px solid var(--border);
+  padding: 16px 24px;
+  background: rgba(6,6,10,.92);
+  backdrop-filter: blur(12px);
+  display: flex; gap: 10px; align-items: flex-end;
+}
+.chat-bar textarea {
+  resize: none;
+  border-radius: 10px;
+  min-height: 48px;
+  max-height: 150px;
+  font-size: .9rem;
+  padding: 12px 14px;
+  overflow-y: auto;
+}
+.send-btn {
+  width: 48px; height: 48px; flex-shrink: 0;
+  background: var(--acc);
+  border: none; border-radius: 10px;
+  font-size: 1.1rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: opacity .18s, transform .12s;
+}
+.send-btn:hover { opacity: .88; transform: scale(1.05); }
+.send-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+
+/* ─── LOADING OVERLAY ─── */
+.overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(6,6,10,.82);
+  backdrop-filter: blur(8px);
+  z-index: 500;
+  align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+}
+.overlay.show { display: flex; }
+.spin {
+  width: 40px; height: 40px;
+  border: 2.5px solid var(--border2);
+  border-top-color: var(--acc);
+  border-radius: 50%;
+  animation: spin .65s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.overlay p { font-family: 'DM Mono', monospace; font-size: .82rem; color: var(--sub); }
+
+/* ─── TOAST ─── */
+.toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(70px);
+  background: var(--s3); border: 1px solid var(--border2);
+  color: var(--text); padding: 11px 20px; border-radius: 10px;
+  font-size: .85rem; z-index: 600;
+  opacity: 0; transition: all .3s;
+  white-space: nowrap;
+}
+.toast.err { border-color: rgba(255,80,80,.4); color: #ff8080; }
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 720px) {
+  .iv-layout { grid-template-columns: 1fr; }
+  .iv-sidebar { display: none; }
+  .topbar { padding: 0 16px; }
+  .setup-wrap { padding: 32px 16px 60px; }
+  .cta-row { flex-direction: column; }
+  .role-combo { flex-direction: column; }
+  .role-divider { display: none; }
+  .chat-msgs { padding: 16px; }
+  .chat-bar { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<div id="root">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">Crack<b>It</b></div>
+  <div class="topbar-right">
+    <span class="pill" id="modePill">MVP</span>
+    <span class="pill" id="roundPill" style="display:none">— 轮</span>
+  </div>
+</div>
+
+<!-- ══ SETUP PAGE ══ -->
+<div class="page active" id="pgSetup">
+<div class="setup-wrap">
+  <div class="setup-hero">
+    <div class="eyebrow">CrackIt · 模拟真实压力面试</div>
+    <h1><em>AI</em> 压力面试模拟器</h1>
+    <p>结合真实面经 + 你的简历，模拟高压面试<br>每轮给出逻辑、表达、方法论的精准反馈</p>
+  </div>
+
+  <!-- ① 目标公司 -->
+  <div class="field">
+    <label class="field-label">目标公司</label>
+    <div class="role-combo">
+      <div class="role-select-wrap">
+        <select id="companySelect" onchange="onCompanySelect()">
+          <option value="">— 选择预设公司 —</option>
+          <optgroup label="大厂">
+            <option value="字节跳动">🐦 字节跳动</option>
+            <option value="腾讯">🐧 腾讯</option>
+            <option value="阿里巴巴">🧡 阿里巴巴</option>
+            <option value="美团">🛵 美团</option>
+            <option value="拼多多">🛒 拼多多</option>
+            <option value="京东">📦 京东</option>
+            <option value="小红书">📕 小红书</option>
+            <option value="快手">⚡ 快手</option>
+            <option value="百度">🔍 百度</option>
+            <option value="网易">🎮 网易</option>
+          </optgroup>
+          <optgroup label="新兴/出海">
+            <option value="滴滴">🚗 滴滴</option>
+            <option value="得物">👟 得物</option>
+            <option value="SHEIN">🛍 SHEIN</option>
+            <option value="TikTok">🎵 TikTok</option>
+          </optgroup>
+          <optgroup label="金融/其他">
+            <option value="蚂蚁集团">🐜 蚂蚁集团</option>
+            <option value="微信支付">💳 微信支付</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="role-divider">或</div>
+      <div class="role-custom-wrap">
+        <input type="text" id="companyCustom" placeholder="自定义公司名称" oninput="onCompanyCustom()" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 目标岗位 -->
+  <div class="field">
+    <label class="field-label">目标岗位</label>
+    <div class="role-combo">
+      <div class="role-select-wrap">
+        <select id="roleSelect" onchange="onRoleSelect()">
+          <option value="">— 选择预设岗位 —</option>
+          <optgroup label="产品">
+            <option value="产品经理">产品经理（通用）</option>
+            <option value="增长产品经理">增长产品经理</option>
+            <option value="用户产品经理">用户产品经理</option>
+            <option value="商业化产品经理">商业化产品经理</option>
+            <option value="数据产品经理">数据产品经理</option>
+          </optgroup>
+          <optgroup label="运营">
+            <option value="增长运营">增长运营</option>
+            <option value="用户运营">用户运营</option>
+            <option value="内容运营">内容运营</option>
+            <option value="活动运营">活动运营</option>
+            <option value="社区运营">社区运营</option>
+            <option value="商业化运营">商业化运营</option>
+          </optgroup>
+          <optgroup label="市场/投放">
+            <option value="广告投放优化师">广告投放优化师</option>
+            <option value="品牌市场">品牌市场</option>
+            <option value="SEO/SEM">SEO / SEM</option>
+          </optgroup>
+          <optgroup label="数据">
+            <option value="数据分析师">数据分析师</option>
+            <option value="商业分析师">商业分析师</option>
+          </optgroup>
+        </select>
+      </div>
+      <div class="role-divider">或</div>
+      <div class="role-custom-wrap">
+        <input type="text" id="roleCustom" placeholder="自定义岗位，如：增长黑客" oninput="onRoleCustom()" />
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 简历 -->
+  <div class="field">
+    <label class="field-label">简历内容（粘贴文字）</label>
+    <textarea id="resume" rows="7" placeholder="粘贴你的简历，越详细越好。面试官会根据你的真实背景追问&#10;&#10;示例：XX大学计算机专业，3年互联网经验，在XX公司负责DAU 500W+社区产品，擅长数据驱动决策，主导过用户增长项目使次日留存提升15%…"></textarea>
+  </div>
+
+  <!-- ④ API Key（可选） -->
+  <div class="field">
+    <label class="field-label">智谱 API Key（选填，不填进入 Demo 模式）</label>
+    <div class="api-row">
+      <input type="password" id="apiKey" placeholder="填写后使用真实 AI 面试官，不填可预览交互效果" />
+    </div>
+    <div class="api-note">
+      <a href="https://open.bigmodel.cn" target="_blank">→ 免费申请 GLM API Key</a>
+      &nbsp;·&nbsp; Key 只在本地使用，不会上传到任何服务器
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-row">
+    <button class="btn-demo" onclick="startDemo()">👁 Demo 预览</button>
+    <button class="btn-primary" id="startBtn" onclick="startReal()">开始真实面试 →</button>
+  </div>
+</div>
+</div>
+
+<!-- ══ INTERVIEW PAGE ══ -->
+<div class="page" id="pgIV">
+<div class="iv-layout">
+
+  <!-- Sidebar -->
+  <aside class="iv-sidebar">
+    <div>
+      <div class="sb-label">面试上下文</div>
+      <div class="sb-ctx">
+        <div class="sb-chip">🏢 <strong id="sb-company">—</strong></div>
+        <div class="sb-chip">👤 <strong id="sb-role">—</strong></div>
+        <div class="sb-chip" id="sb-mode-chip">🎭 <strong>Demo 模式</strong></div>
+      </div>
+    </div>
+    <div>
+      <div class="sb-label">当前进度</div>
+      <div class="round-box">
+        <div class="round-big" id="sb-round">1</div>
+        <div class="round-sub">当前轮次 · 每轮即时反馈</div>
+      </div>
+    </div>
+    <div>
+      <div class="sb-label">能力评分</div>
+      <div class="score-grid">
+        <div class="score-item">
+          <div class="score-val score-logic" id="sc-logic">—</div>
+          <div class="score-lbl">逻辑思维</div>
+        </div>
+        <div class="score-item">
+          <div class="score-val score-expr" id="sc-expr">—</div>
+          <div class="score-lbl">语言表达</div>
+        </div>
+      </div>
+    </div>
+    <div class="sb-tip">
+      💡 优秀回答 = <strong>结论先行</strong> + <strong>数据支撑</strong> + <strong>方法论框架</strong>。先说结论，再展开分析。
+    </div>
+    <button class="sb-reset" onclick="goSetup()">↩ 重新配置</button>
+  </aside>
+
+  <!-- Chat -->
+  <div class="iv-chat">
+    <div class="chat-msgs" id="chatMsgs"></div>
+    <div class="chat-bar">
+      <textarea id="userInput" rows="1" placeholder="输入你的回答… Enter 发送，Shift+Enter 换行"
+        onkeydown="handleKey(event)" oninput="autoH(this)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMsg()" title="发送">➤</button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</div><!-- /root -->
+
+<!-- Loading -->
+<div class="overlay" id="overlay">
+  <div class="spin"></div>
+  <p id="overlayTxt">处理中…</p>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+const S = {
+  apiKey: '',
+  company: '',
+  role: '',
+  resume: '',
+  msgs: [],        // [{role,content}]
+  round: 0,
+  isDemo: false,
+  busy: false,
+  logicScore: null,
+  exprScore: null,
+};
+
+/* ══════════════════════════════════════
+   DEMO DATA
+══════════════════════════════════════ */
+const DEMO_FLOW = [
+  {
+    q: `你好，我是负责这次面试的产品负责人。
+
+我们直接开始——请用 2 分钟介绍一下你自己，重点说说你做过的最有成就感的一个项目，以及你在其中解决了什么核心问题。`,
+    userSample: `好的，我叫李明，本科毕业于某大学计算机专业，有 2 年互联网产品经验。
+
+最有成就感的项目是在上家公司负责的用户留存优化项目。当时次日留存只有 18%，我们通过用户分层和个性化推送策略，3 个月把次日留存做到了 26%，提升了 44%。
+
+主要方法是先做用户行为分析，找到流失节点，然后针对不同用户群设计差异化的引导策略。`,
+    fb: {
+      logic: `回答结构较清晰，有数据支撑（18%→26%）。但"3个月"的时间线和"44%提升"之间缺少关键的归因分析——是哪个具体动作带来的最大增量？缺少对比组或 A/B 实验数据，结论说服力偏弱。`,
+      expr: `"用户行为分析"、"差异化引导策略"等表述偏模糊，面试官听不出你具体做了什么。建议用动词+名词+量词的方式，如"通过 RFM 模型将用户分为 5 层，对高价值流失用户发送 Push，对新用户优化 Day1 引导流程"。`,
+      method: `推荐使用 STAR 法则（Situation→Task→Action→Result）拆解成就项目。动作层（Action）是核心，要拆解到"做了 A，因为假设 B，验证结果 C"的颗粒度。数据量化不仅是结果数据，还要有过程数据和基准数据。`,
+      logicScore: 6,
+      exprScore: 5,
+    }
+  },
+  {
+    q: `留存从 18% 到 26%，这个数字不错。我想深挖一下——你刚说的"用户分层"，具体是怎么分的？分层之后，各层用户你分别做了什么差异化策略，能不能把整个逻辑链条说清楚？`,
+    userSample: `我们主要按照用户活跃度分层，分成高活跃、中活跃和低活跃三类。高活跃用户主要做留存，中活跃做激活，低活跃做召回。`,
+    fb: {
+      logic: `这个回答是典型的"结论替代过程"——你说了分三类，但没有说分层的依据是什么（维度、阈值），也没有说三类用户分别做了什么具体动作、效果如何。逻辑链条实际上是断的。`,
+      expr: `"高活跃做留存、低活跃做召回"是行业常识，面试官已经知道这个，你需要说的是"你怎么做的"而不是"应该做什么"。回答要从"是什么"升级到"为什么这样做"+"怎么做"。`,
+      method: `分层逻辑建议明确说出三个要素：① 分层维度（如：登录频次×内容消费深度）② 分层阈值（如：7日内登录≥3次=高活跃）③ 对应策略（如：高活跃用户推社交功能引导发帖，因为发帖用户留存比纯浏览高 2 倍）。这才是完整的逻辑链。`,
+      logicScore: 4,
+      exprScore: 5,
+    }
+  },
+  {
+    q: `好，我换个角度问你。假设你明天入职，我给你一个任务：我们 App 的 Day7 留存最近下降了 5 个百分点，从 35% 掉到了 30%。限你 72 小时给我一个诊断报告和初步行动方案，你会怎么做？`,
+    userSample: `我会先看数据，分析是哪个环节出问题了，然后看看是不是有什么功能改动导致的，再看用户反馈，最后给出改进建议。`,
+    fb: {
+      logic: `这个回答缺乏结构和优先级。"先看数据"——看什么数据？什么顺序？怎么判断是哪个问题？72小时是有限资源，没有优先级的排查是低效的。需要建立一个系统性的诊断框架，而不是罗列动作。`,
+      expr: `动词过于笼统："看数据"、"分析问题"、"看反馈"——这三个动作任何人都会说。面试官想听到的是你的分析框架和判断力，而不是步骤列表。`,
+      method: `推荐用"漏斗拆解 + 假设验证"框架：① 先做外部归因（版本上线？竞品事件？渠道变化？）② 再做内部漏斗拆解（新用户 vs 老用户？哪个功能路径流失最多？）③ 建立假设清单排优先级 ④ 72小时内验证 Top2 假设，给出有数据支撑的初步结论。这才是有结构的诊断思路。`,
+      logicScore: 3,
+      exprScore: 4,
+    }
+  },
+];
+let demoStep = 0;
+
+/* ══════════════════════════════════════
+   SETUP — INTERACTIONS
+══════════════════════════════════════ */
+function onCompanySelect() {
+  const v = document.getElementById('companySelect').value;
+  if (v) { S.company = v; document.getElementById('companyCustom').value = ''; }
+}
+function onCompanyCustom() {
+  const v = document.getElementById('companyCustom').value.trim();
+  if (v) { S.company = v; document.getElementById('companySelect').value = ''; }
+}
+
+function onRoleSelect() {
+  const v = document.getElementById('roleSelect').value;
+  if (v) {
+    S.role = v;
+    document.getElementById('roleCustom').value = '';
+  }
+}
+function onRoleCustom() {
+  const v = document.getElementById('roleCustom').value.trim();
+  if (v) {
+    S.role = v;
+    document.getElementById('roleSelect').value = '';
+  }
+}
+
+/* ══════════════════════════════════════
+   START
+══════════════════════════════════════ */
+async function startDemo() {
+  S.company = S.company || '字节跳动';
+  S.role = S.role || '产品经理';
+  S.resume = '（Demo 模式 — 示例候选人）';
+  S.isDemo = true;
+  S.msgs = [];
+  S.round = 0;
+  demoStep = 0;
+  enterIV();
+  setModePill('demo');
+  await sleep(400);
+  showTyping();
+  await sleep(1200);
+  hideTyping();
+  const q = DEMO_FLOW[0].q;
+  appendAI(q);
+  S.msgs.push({ role: 'assistant', content: q });
+  S.round = 1;
+  updateRound();
+}
+
+async function startReal() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { toast('请填写 API Key，或点击「Demo 预览」体验交互', true); return; }
+  if (!S.company) { toast('请选择目标公司', true); return; }
+  if (!S.role) { toast('请选择或填写目标岗位', true); return; }
+  const resume = document.getElementById('resume').value.trim();
+  if (!resume) { toast('请粘贴简历内容', true); return; }
+
+  S.apiKey = key;
+  S.resume = resume;
+  S.isDemo = false;
+  S.msgs = [];
+  S.round = 0;
+
+  enterIV();
+  setModePill('live');
+
+  showOverlay('正在搜索真实面经…');
+  let searchCtx = '';
+  try { searchCtx = await searchFaceExperience(); } catch(e) { searchCtx = ''; }
+  S.searchCtx = searchCtx;
+  overlayTxt('面试官正在准备问题…');
+
+  try {
+    const sys = buildSys();
+    const initMsg = [{ role: 'user', content: '[面试开始] 请扮演面试官，简短介绍自己，然后直接提出第一个面试问题。不要说废话，直接进入面试节奏。' }];
+    const reply = await callGLM(sys, initMsg);
+    S.msgs = [{ role: 'user', content: '[面试开始]' }, { role: 'assistant', content: reply }];
+    S.round = 1;
+    updateRound();
+    appendAI(reply);
+  } catch(e) { toast('初始化失败: ' + e.message, true); }
+
+  hideOverlay();
+}
+
+/* ══════════════════════════════════════
+   SEND
+══════════════════════════════════════ */
+async function sendMsg() {
+  if (S.busy) return;
+  const inp = document.getElementById('userInput');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+  autoH(inp);
+
+  appendUser(txt);
+  S.round++;
+  updateRound();
+
+  if (S.isDemo) {
+    await handleDemo(txt);
+  } else {
+    await handleReal(txt);
+  }
+}
+
+async function handleDemo(txt) {
+  S.busy = true;
+  setBusy(true);
+
+  const step = Math.min(demoStep, DEMO_FLOW.length - 1);
+  const fb = DEMO_FLOW[step].fb;
+
+  await sleep(600);
+  showTyping();
+  await sleep(1000);
+  hideTyping();
+  appendFeedback(fb, S.round);
+  updateScores(fb.logicScore, fb.exprScore);
+
+  demoStep++;
+
+  if (demoStep < DEMO_FLOW.length) {
+    await sleep(700);
+    showTyping();
+    await sleep(900);
+    hideTyping();
+    appendAI(DEMO_FLOW[demoStep].q);
+  } else {
+    await sleep(700);
+    appendAI('Demo 结束了 👏 以上是模拟的3轮压力面试体验。\n\n填入你的 API Key 即可开始真实面试——面试官会结合你的实际简历和搜索到的真实面经发问。');
+  }
+
+  S.busy = false;
+  setBusy(false);
+}
+
+async function handleReal(txt) {
+  S.busy = true;
+  setBusy(true);
+  S.msgs.push({ role: 'user', content: txt });
+  showTyping();
+
+  try {
+    // 1. Get feedback for this answer
+    const fbRaw = await callGLM(buildFeedbackSys(), S.msgs);
+    hideTyping();
+    const fb = parseFeedback(fbRaw);
+    appendFeedback(fb, S.round);
+    if (fb.logicScore) updateScores(fb.logicScore, fb.exprScore);
+
+    // 2. Next question
+    await sleep(500);
+    showTyping();
+    const nextMsgs = [...S.msgs, { role: 'assistant', content: fbRaw }, { role: 'user', content: '[请继续提问下一个面试问题，不重复刚才的反馈，直接问]' }];
+    const nextQ = await callGLM(buildSys(), nextMsgs);
+    hideTyping();
+    S.msgs.push({ role: 'assistant', content: fbRaw });
+    S.msgs.push({ role: 'assistant', content: nextQ });
+    appendAI(nextQ);
+  } catch(e) {
+    hideTyping();
+    toast('请求失败: ' + e.message, true);
+  }
+
+  S.busy = false;
+  setBusy(false);
+}
+
+/* ══════════════════════════════════════
+   GLM API
+══════════════════════════════════════ */
+async function searchFaceExperience() {
+  const q = `${S.company} ${S.role} 面试题 面经 高频问题`;
+  const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.apiKey}` },
+    body: JSON.stringify({
+      model: 'glm-4-flash-250414',
+      messages: [{ role: 'user', content: `搜索"${q}"，整理5个真实高频面试题，直接返回JSON数组，格式["问题1","问题2"]，只返回JSON` }],
+      tools: [{ type: 'web_search' }],
+      max_tokens: 600,
+    })
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+  const d = await resp.json();
+  const txt = d.choices[0].message.content || '';
+  const m = txt.match(/\[[\s\S]*?\]/);
+  if (m) { try { return JSON.parse(m[0]).join('\n'); } catch(_) {} }
+  return txt;
+}
+
+async function callGLM(sys, msgs) {
+  const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${S.apiKey}` },
+    body: JSON.stringify({
+      model: 'glm-4-flash-250414',
+      messages: [{ role: 'system', content: sys }, ...msgs],
+      max_tokens: 1400,
+      temperature: 0.82,
+    })
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+  const d = await resp.json();
+  return d.choices[0].message.content;
+}
+
+/* ══════════════════════════════════════
+   PROMPTS
+══════════════════════════════════════ */
+function buildSys() {
+  return `你是${S.company}${S.role}岗位的资深面试官（工作年限8年以上，亲自面试过数百人）。
+
+【候选人简历】
+${S.resume}
+
+【参考面经（真实高频题）】
+${S.searchCtx || '使用通用面试题库'}
+
+【面试核心原则】
+你的目标是考察候选人的真实能力，而非为了难为他。每个问题都有明确的考察目的：
+- 逻辑推理与结构化思维
+- 数据意识与量化能力  
+- 解决问题的方法论与框架
+- 实际落地的执行经验
+- 面对压力时的反应能力
+
+【面试风格】
+- 直接、专业，不废话，不寒暄
+- 深挖追问，但目的是理解候选人的真实思路，不是为了让他答不上来
+- 每次只问一个问题，可以基于上一个回答追问
+- 问题有层次：先考察基本能力，再逐步加深难度
+- 结合候选人简历中的实际经历提问
+
+只输出面试问题本身，不要加评价或解释。`;
+}
+
+function buildFeedbackSys() {
+  return `你是一位顶级面试教练，刚刚听完候选人对${S.company}${S.role}岗位面试问题的一轮回答。
+
+请对这轮回答给出即时、精准的反馈。
+
+【严格按照以下 JSON 格式输出，不要输出其他任何内容】：
+{
+  "logicScore": <1-10的整数，评估逻辑严密性>,
+  "exprScore": <1-10的整数，评估语言表达清晰度>,
+  "logic": "<逻辑问题：具体指出回答中逻辑不严密、论证不足、因果缺失的地方，并举例说明>",
+  "expr": "<语言表达：具体指出用词模糊、结构混乱、重点不突出的问题，给出更好的表达方式示例>",
+  "method": "<方法论提升：给出1-2个具体可执行的方法论或框架，说明如何在面试中应用这个方法回答类似问题>",
+  "better": "<优化示范：用30-50字重新表达候选人这个回答的核心观点，展示更好的表达方式>"
+}
+
+反馈要具体、有建设性，聚焦于帮助候选人提升，而非批评。分数要诚实，不要虚高。`;
+}
+
+function parseFeedback(raw) {
+  try {
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (m) {
+      const obj = JSON.parse(m[0]);
+      return obj;
+    }
+  } catch(_) {}
+  // fallback parse
+  return {
+    logic: extractField(raw, 'logic') || raw,
+    expr: extractField(raw, 'expr') || '',
+    method: extractField(raw, 'method') || '',
+    better: extractField(raw, 'better') || '',
+    logicScore: null,
+    exprScore: null,
+  };
+}
+function extractField(txt, key) {
+  const re = new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`);
+  const m = txt.match(re);
+  return m ? m[1] : '';
+}
+
+/* ══════════════════════════════════════
+   UI — MESSAGES
+══════════════════════════════════════ */
+function appendAI(txt) {
+  const el = mk('div', 'msg msg-ai');
+  el.innerHTML = `<div class="msg-meta">面试官 · ${S.company}</div><div class="msg-bubble">${esc(txt)}</div>`;
+  addMsg(el);
+}
+function appendUser(txt) {
+  const el = mk('div', 'msg msg-user');
+  el.innerHTML = `<div class="msg-meta">你</div><div class="msg-bubble">${esc(txt)}</div>`;
+  addMsg(el);
+}
+function appendFeedback(fb, round) {
+  const logicN = fb.logicScore || '—';
+  const exprN  = fb.exprScore  || '—';
+  const el = mk('div', 'fb-card');
+  el.innerHTML = `
+    <div class="fb-header">
+      <h3>⚡ 第 ${round} 轮反馈</h3>
+      <span class="fb-tag">INSTANT FEEDBACK</span>
+    </div>
+    ${fb.logic ? `<div class="fb-row">
+      <div class="fb-row-label"><span class="fb-dot"></span> 逻辑问题</div>
+      <p>${esc(fb.logic)}</p>
+    </div>` : ''}
+    ${fb.expr ? `<div class="fb-row">
+      <div class="fb-row-label"><span class="fb-dot g"></span> 语言表达</div>
+      <p>${esc(fb.expr)}</p>
+    </div>` : ''}
+    ${fb.method ? `<div class="fb-row">
+      <div class="fb-row-label"><span class="fb-dot b"></span> 方法论提升</div>
+      <p>${esc(fb.method)}</p>
+    </div>` : ''}
+    ${fb.better ? `<div class="fb-row">
+      <div class="fb-row-label"><span class="fb-dot"></span> 优化示范</div>
+      <p style="color:var(--acc);font-style:italic">${esc(fb.better)}</p>
+    </div>` : ''}
+    <div class="fb-score-row">
+      <div class="fb-score"><div class="n logic-c">${logicN}</div><div class="l">逻辑思维 /10</div></div>
+      <div class="fb-score"><div class="n expr-c">${exprN}</div><div class="l">语言表达 /10</div></div>
+    </div>`;
+  addMsg(el);
+}
+
+let typingEl = null;
+function showTyping() {
+  typingEl = mk('div', 'typing-wrap');
+  typingEl.innerHTML = `<div class="msg-meta">面试官</div><div class="typing-bubble"><span></span><span></span><span></span></div>`;
+  addMsg(typingEl);
+}
+function hideTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+function addMsg(el) {
+  const c = document.getElementById('chatMsgs');
+  c.appendChild(el);
+  c.scrollTop = c.scrollHeight;
+}
+
+/* ══════════════════════════════════════
+   UI — MISC
+══════════════════════════════════════ */
+function enterIV() {
+  document.getElementById('sb-company').textContent = S.company;
+  document.getElementById('sb-role').textContent = S.role;
+  document.getElementById('sb-mode-chip').querySelector('strong').textContent = S.isDemo ? 'Demo 模式' : '真实 AI 面试';
+  document.getElementById('chatMsgs').innerHTML = '';
+  document.getElementById('sc-logic').textContent = '—';
+  document.getElementById('sc-expr').textContent = '—';
+  showPage('pgIV');
+}
+
+function setModePill(mode) {
+  const p = document.getElementById('modePill');
+  const rp = document.getElementById('roundPill');
+  p.className = 'pill ' + mode;
+  p.textContent = mode === 'demo' ? 'DEMO' : 'LIVE';
+  rp.style.display = 'flex';
+}
+
+function updateRound() {
+  document.getElementById('sb-round').textContent = S.round;
+  document.getElementById('roundPill').textContent = `第 ${S.round} 轮`;
+}
+function updateScores(l, e) {
+  if (l != null) { document.getElementById('sc-logic').textContent = l; S.logicScore = l; }
+  if (e != null) { document.getElementById('sc-expr').textContent = e; S.exprScore = e; }
+}
+
+function setBusy(on) {
+  document.getElementById('sendBtn').disabled = on;
+  document.getElementById('userInput').disabled = on;
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function goSetup() { showPage('pgSetup'); }
+
+function showOverlay(txt) { document.getElementById('overlay').classList.add('show'); overlayTxt(txt); }
+function hideOverlay() { document.getElementById('overlay').classList.remove('show'); }
+function overlayTxt(t) { document.getElementById('overlayTxt').textContent = t; }
+
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast' + (err ? ' err' : '') + ' show';
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+function mk(tag, cls) { const e = document.createElement(tag); e.className = cls; return e; }
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
+function autoH(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+}
+</script>
+</body>
+</html>
